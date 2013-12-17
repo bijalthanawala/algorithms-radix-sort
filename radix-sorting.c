@@ -1,19 +1,30 @@
+/* Include
+************/
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <memory.h>
+#include <math.h>
 
+
+/* Typedefs
+***************/
+typedef int bool;
+
+
+/* Macros
+************/
 #define swap(a , b) { \
                         uint32_t *t = a; \
                         a = b; \
                         b = t; \
                     }
 
-#define ARRAY_SIZE 100000000
-
-typedef int bool;
-#define true (int)1 
-#define false (int)0
+/* Constants
+***************/
+#define ARRAY_SIZE 1000000
+#define true (bool)1 
+#define false (bool)0
 
 
 void print_array(uint32_t a[], uint32_t size, char *msg) {
@@ -26,12 +37,22 @@ void print_array(uint32_t a[], uint32_t size, char *msg) {
     }
 }
 
-void radix_sort(uint32_t a[], uint32_t size) {
-    int radix = 2; //Range of values in key-unit (in this case key-unit = a bit. So values are 2 (0 and 1)
-    uint32_t keymask = 1;
+bool is_pow2(int n) {
+    return (n & (n-1)) ? false : true;
+}
+
+//Size of the subkey (in bits): Call it sosk
+//Range of Values of key = 2 ^ (sosk)
+//Keymask Initial = 2 ^(sosk) - 1 
+//Keymask with each iteration = keymask << sosk
+//Number of iterations to perform = size_of_the_entire_key / sok
+
+void radix_sort(uint32_t a[], uint32_t size_array, uint32_t size_subkey) {
+    int range_value = (int)pow(2, size_subkey); //Range of values in key-unit
+    uint32_t keymask = range_value-1;
     int nr_bits = 32;
-    uint32_t *count = calloc( radix+1 , sizeof(uint32_t));
-    uint32_t *interim = calloc(size, sizeof(uint32_t));
+    uint32_t *count = calloc( range_value+1 , sizeof(uint32_t));
+    uint32_t *interim = calloc(size_array, sizeof(uint32_t));
     uint32_t * p_inter_source = NULL;
     uint32_t* p_inter_dest = NULL;
     int i = 0;
@@ -39,28 +60,36 @@ void radix_sort(uint32_t a[], uint32_t size) {
     int fullkey = 0;
     int bit = 0;
 
+
+    //Validate that size_subkey is a power of 2
+    if( ! is_pow2(size_subkey)) {
+        printf("Size of subkey (%d) is not a power of 2. Exiting.\n", size_subkey);
+        return;
+    }
+
+    printf("initial keymask = %04X\n",keymask);
     p_inter_source=&a[0];
     p_inter_dest=interim;
-    for(bit=0; bit < nr_bits; bit++, keymask <<= 1) {
+    for(bit=0; bit < nr_bits; bit+=size_subkey, keymask <<= size_subkey) {
 
         // Re/Initialize the frequency/counts
-        memset(count, 0, (radix+1) * sizeof(uint32_t));
+        memset(count, 0, (range_value+1) * sizeof(uint32_t));
 
 
         //Count the frequencies
-        for(i=0; i<size; i++) {
+        for(i=0; i<size_array; i++) {
             fullkey = (p_inter_source[i] & keymask);
             key = fullkey >> bit;
             count[ key +1 ]++;
         }
 
         //Perform cumulative count
-        for(i=1; i < (radix+1); i++) {
+        for(i=1; i < (range_value+1); i++) {
             count[i] += count[i-1];
         }
     
         //Sort based on the current key
-        for(i=0; i<size; i++) {
+        for(i=0; i<size_array; i++) {
             fullkey = (p_inter_source[i] & keymask);
             key = fullkey >> bit;
             //printf("Sorting index: %d keymask = %d fullkey = %d  key = %d elem = %d\n",
@@ -68,10 +97,12 @@ void radix_sort(uint32_t a[], uint32_t size) {
             p_inter_dest[ count[key]++ ] = p_inter_source[i];
         }
         swap(p_inter_dest, p_inter_source);
+        printf("keymask = %08X\n",keymask);
     }
 
+
     if( nr_bits % 2) {
-        for(i=0; i < size; i++) {
+        for(i=0; i < size_array; i++) {
             a[i] = interim[i];
         }
     }
@@ -101,15 +132,14 @@ bool is_sorted(uint32_t* a, uint32_t size) {
             return false;
         }
     }
-    printf("is_sorted: true\n");
     return true;
 }
 
-uint32_t a[ARRAY_SIZE] = {0};
 int main() {
 
     int i = 0;
     time_t start_time = 0;
+    uint32_t a[ARRAY_SIZE] = {0};
     
 
     srand(time(NULL));
@@ -120,7 +150,7 @@ int main() {
     printf("is sorted : %s\n", is_sorted(a , sizeof(a)/sizeof(a[0])) ? "True" : " False");
     
     start_time = time(NULL);
-    radix_sort(a, sizeof(a)/sizeof(a[0]));
+    radix_sort(a, sizeof(a)/sizeof(a[0]), 4);
     printf("Time taken: %ld\n", time(NULL) - start_time);
 
     printf("after radix_sort()\n");
